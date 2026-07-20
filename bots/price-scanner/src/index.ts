@@ -25,6 +25,9 @@ const UNISWAP_V2_PAIR_ABI = [
   'function token0() external view returns (address)',
   'function token1() external view returns (address)'
 ];
+const EXECUTOR_ABI = [
+  'function executeArbitrage(address[] tokens, address[] pools, uint24[] fees, uint256 amountIn) external'
+];
 
 interface PoolCache {
   address: string;
@@ -38,6 +41,7 @@ interface PoolCache {
 
 class PriceScanner {
   private provider!: ethers.JsonRpcProvider;
+  private signer?: ethers.Wallet;
   private chainName: string;
   private networkConfig: any;
   private pools: PoolCache[] = [];
@@ -59,8 +63,8 @@ class PriceScanner {
     const privateKey = process.env.EXECUTOR_PRIVATE_KEY;
     if (privateKey) {
       try {
-        const wallet = new ethers.Wallet(privateKey, this.provider);
-        console.log(`[Scanner] Wallet signer loaded: ${wallet.address}`);
+        this.signer = new ethers.Wallet(privateKey, this.provider);
+        console.log(`[Scanner] Wallet signer loaded: ${this.signer.address}`);
       } catch (err: any) {
         console.warn(`[Scanner] Failed to load wallet signer:`, err.message);
       }
@@ -295,6 +299,36 @@ class PriceScanner {
 
       // Log opportunity if profitable or interesting
       if (netProfitUsd > -5.0) { // Log all slightly-negative or profitable for analytics
+        const isProfitable = netProfitUsd >= settings.minProfitThreshold;
+        let status = isProfitable ? 'DETECTED' : 'SIMULATED';
+        let txHash: string | undefined;
+        let errorMessage: string | undefined;
+
+        // AUTOMATION: Execute trade if profitable and paper trading is disabled
+        if (isProfitable && !settings.paperTrading) {
+          console.log(`[Scanner] Profitable opportunity DETECTED! Executing automated trade...`);
+          try {
+            status = 'EXECUTING';
+            const tx = await this.executeTrade(route, inputAmount);
+            txHash = tx.hash;
+            console.log(`[Scanner] Trade submitted. TxHash: ${txHash}`);
+            
+            const receipt = await tx.wait();
+            if (receipt && receipt.status === 1) {
+              status = 'SUCCESS';
+              console.log(`[Scanner] Trade successfully settled on-chain!`);
+            } else {
+              status = 'FAILED';
+              errorMessage = 'Transaction reverted on-chain';
+              console.error(`[Scanner] Trade execution reverted.`);
+            }
+          } catch (err: any) {
+            status = 'FAILED';
+            errorMessage = err.message || 'Unknown execution error';
+            console.error(`[Scanner] Trade automation execution failed:`, errorMessage);
+          }
+        }
+
         await prisma.opportunity.create({
           data: {
             chain: this.chainName,
@@ -302,7 +336,9 @@ class PriceScanner {
             grossProfit: grossProfitUsd,
             gasCost: gasCostUsd,
             netProfit: netProfitUsd,
-            status: netProfitUsd >= settings.minProfitThreshold ? 'DETECTED' : 'SIMULATED',
+            status,
+            txHash,
+            errorMessage,
             details: {
               inputAmount,
               outputAmount: currentAmount,
@@ -377,29 +413,47 @@ class PriceScanner {
     }
   }
 
-  private calculateUniswapV3Price(
-    pool: PoolCache,
-    state: any,
-    baseToken: string,
-    quoteToken: string
-  ): number {
-    const sqrtPriceX96 = BigInt(state.sqrtPriceX96);
-    
-    // Price = (sqrtPriceX96 / 2^96)^2
-    const ratio = Number(sqrtPriceX96) / Math.pow(2, 96);
-    const rawPrice = ratio * ratio;
-
-    const token0Decimals = this.networkConfig.tokens[pool.token0].decimals;
-    const token1Decimals = this.networkConfig.tokens[pool.token1].decimals;
-
-    // Price of Token0 in terms of Token1
-    const token0PriceInToken1 = rawPrice * Math.pow(10, token0Decimals - token1Decimals);
-
-    if (baseToken === pool.token0 && quoteToken === pool.token1) {
-      return token0PriceInToken1;
-    } else {
-      return 1 / token0PriceInToken1;
+  private async executeTrade(route: any, inputAmount: number): Promise<ethers.TransactionResponse> {
+    if (!this.signer) {
+      throw new Error('No wallet signer loaded. Configure EXECUTOR_PRIVATE_KEY.');
     }
+    const contractAddress = process.env.EXECUTOR_CONTRACT_ADDRESS;
+    if (!contractAddress) {
+      throw new Error('No contract address configured. Configure EXECUTOR_CONTRACT_ADDRESS.');
+    }
+
+    const executorContract = new ethers.Contract(contractAddress, EXECUTOR_ABI, this.signer);
+
+    // Resolve token addresses for the route
+    const tokenAddresses = route.path.map((symbol: string) => {
+      const token = this.networkConfig.tokens[symbol];
+      if (!token) throw new Error(`Token address not found for symbol: ${symbol}`);
+      return token.address;
+    });
+
+    // Resolve pool addresses and fees
+    const poolAddresses = route.pools.map((p: any) => p.address);
+    const poolFees = route.pools.map((p: any) => p.fee);
+
+    // Initial loan amount formatted to WETH decimals (18)
+    const amountInWei = ethers.parseUnits(inputAmount.toString(), 18);
+
+    console.log(`[Scanner] Triggering smart contract execution at ${contractAddress}...`);
+    console.log(`[Scanner] Tokens: ${route.path.join(' -> ')}`);
+    console.log(`[Scanner] Pools: ${poolAddresses.join(', ')}`);
+
+    // Submit transaction
+    const tx = await executorContract.executeArbitrage(
+      tokenAddresses,
+      poolAddresses,
+      poolFees,
+      amountInWei,
+      {
+        gasLimit: 350000n // safe limit for 3-hop swap
+      }
+    );
+
+    return tx;
   }
 }
 
