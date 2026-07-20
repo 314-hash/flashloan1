@@ -103,11 +103,10 @@ class PriceScanner {
 
   // Pre-seed some standard pools for Arbitrum if database is empty
   private async bootstrapPoolConfigs() {
-    const poolCount = await prisma.poolConfig.count({
+    // Delete existing pool configs for this chain to ensure we use the updated correct mainnet addresses
+    await prisma.poolConfig.deleteMany({
       where: { chain: this.chainName }
     });
-
-    if (poolCount > 0) return;
 
     console.log(`[Scanner] Bootstrapping default pools in database for ${this.chainName}...`);
 
@@ -130,7 +129,7 @@ class PriceScanner {
       {
         chain: 'arbitrum',
         dex: 'UniswapV3',
-        address: normalize('0x502F6b92DAf04F1746B316C4b2bFAf05bCc88e7A'), // USDC/DAI 0.01%
+        address: normalize('0xF0428617433652c9dc6D1093A42AdFbF30D29f74'), // USDC/DAI 0.01%
         token0: 'USDC',
         token1: 'DAI',
         fee: 100,
@@ -139,7 +138,7 @@ class PriceScanner {
       {
         chain: 'arbitrum',
         dex: 'UniswapV3',
-        address: normalize('0xa96028598D9F2C9c34E4c382a0b793B72200000b'), // DAI/WETH 0.05%
+        address: normalize('0x31Fa55e03bAD93C7f8AFfdd2eC616EbFde246001'), // DAI/WETH 0.05%
         token0: 'DAI',
         token1: 'WETH',
         fee: 500,
@@ -148,7 +147,7 @@ class PriceScanner {
       {
         chain: 'arbitrum',
         dex: 'UniswapV3',
-        address: normalize('0x17c14D2c404373577d2777E5db5869E4bbA4B4B9'), // WETH/USDT 0.05%
+        address: normalize('0x641C00A822e8b671738d32a431a4Fb6074E5c79d'), // WETH/USDT 0.05%
         token0: 'WETH',
         token1: 'USDT',
         fee: 500,
@@ -157,7 +156,7 @@ class PriceScanner {
       {
         chain: 'arbitrum',
         dex: 'UniswapV3',
-        address: normalize('0xbe3ded8658245597e1239f8efa507858c54a99ec'), // USDT/USDC 0.01%
+        address: normalize('0x8c9D230D45d6CfeE39a6680Fb7CB7E8DE7Ea8E71'), // USDT/USDC 0.01%
         token0: 'USDT',
         token1: 'USDC',
         fee: 100,
