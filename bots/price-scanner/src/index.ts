@@ -55,6 +55,17 @@ class PriceScanner {
     console.log(`[Scanner] Initializing for chain: ${this.networkConfig.name}...`);
     this.provider = new ethers.JsonRpcProvider(this.networkConfig.rpcUrl);
 
+    // Optional wallet signer verification (safe for paper trading)
+    const privateKey = process.env.EXECUTOR_PRIVATE_KEY;
+    if (privateKey) {
+      try {
+        const wallet = new ethers.Wallet(privateKey, this.provider);
+        console.log(`[Scanner] Wallet signer loaded: ${wallet.address}`);
+      } catch (err: any) {
+        console.warn(`[Scanner] Failed to load wallet signer:`, err.message);
+      }
+    }
+
     // Bootstrap local pool configurations in DB if not exists
     await this.bootstrapPoolConfigs();
 
