@@ -229,6 +229,23 @@ node bots/price-scanner/dist/index.js
 cd apps/dashboard && npm start
 ```
 
+### Vercel Deployment (Dashboard Only)
+
+The Next.js dashboard is optimized to be deployed on Vercel as a monorepo workspace.
+
+#### Step-by-Step Vercel Configuration
+
+1. **Import Project:** Connect your GitHub repository to Vercel and import the repository.
+2. **Project Settings:** Configure the following settings in the Vercel dashboard:
+   - **Framework Preset:** `Next.js`
+   - **Root Directory:** `apps/dashboard` (Vercel automatically detects the root `package-lock.json` and runs workspace install from the root).
+   - **Build & Development Settings:**
+     - **Build Command:** `next build` (Vercel automatically builds using Next.js from within the subdirectory).
+     - **Output Directory:** Override to `.next` (Vercel default).
+3. **Environment Variables:** Add the following variable under Settings -> Environment Variables:
+   - `NEXT_PUBLIC_API_URL`: The public URL of your deployed Express API server (e.g., `https://api.yourdomain.com`).
+4. **Deploy:** Hit Deploy. Vercel will run the workspace `postinstall` script, generate the Prisma client client, and bundle the Next.js app for production.
+
 ### Using a Reverse Proxy (Nginx)
 
 Example Nginx config (`/etc/nginx/sites-available/flashloan`):

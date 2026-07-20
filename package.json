@@ -9,6 +9,7 @@
     "packages/*"
   ],
   "scripts": {
+    "postinstall": "npm run db:generate --workspace=packages/shared",
     "dev:all": "concurrently \"npm run dev --workspace=packages/shared\" \"npm run dev --workspace=apps/api\" \"npm run dev --workspace=bots/price-scanner\" \"npm run dev --workspace=apps/dashboard\"",
     "dev:infra": "docker-compose -f docker/docker-compose.yml up -d",
     "dev:api": "npm run dev --workspace=apps/api",

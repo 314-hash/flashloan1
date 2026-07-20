@@ -6,7 +6,7 @@
   "types": "./src/index.ts",
   "scripts": {
     "dev": "tsc --watch",
-    "build": "tsc",
+    "build": "npm run db:generate && tsc",
     "db:generate": "prisma generate --schema=./prisma/schema.prisma",
     "db:push": "dotenv -e ../../.env prisma db push --schema=./prisma/schema.prisma",
     "db:migrate": "dotenv -e ../../.env prisma migrate dev --schema=./prisma/schema.prisma",
