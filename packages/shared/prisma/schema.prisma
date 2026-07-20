@@ -1,0 +1,50 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Opportunity {
+  id         String   @id @default(uuid())
+  createdAt  DateTime @default(now())
+  chain      String   // e.g. "ethereum", "arbitrum", "polygon", "base", "optimism"
+  route      String   // e.g. "WETH -> USDC -> DAI -> WETH"
+  grossProfit Float    // Gross profit in USD
+  gasCost    Float    // Estimated gas cost in USD
+  netProfit  Float    // Net profit in USD (grossProfit - gasCost)
+  status     String   // "DETECTED", "SIMULATED", "EXECUTING", "SUCCESS", "FAILED", "REJECTED_RISK_ENGINE"
+  txHash     String?  // Transaction hash if executed
+  errorMessage String? // Error message if failed
+  details    Json?    // Detailed block number, pool rates, etc.
+
+  @@index([chain])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model PoolConfig {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  chain     String   // e.g. "ethereum", "arbitrum"
+  dex       String   // "UniswapV3", "SushiSwap", "Balancer", etc.
+  address   String   // Pool contract address
+  token0    String   // Token0 symbol (e.g., "WETH")
+  token1    String   // Token1 symbol (e.g., "USDC")
+  fee       Int      // Fee tier in hundredths of a bip (e.g. 500, 3000, 10000) or Uniswap v2 reserve fee
+  active    Boolean  @default(true)
+
+  @@unique([chain, address])
+}
+
+model BotSettings {
+  id                 String   @id @default("default")
+  updatedAt          DateTime @updatedAt
+  minProfitThreshold Float    @default(10.0) // Minimum net profit in USD
+  slippageTolerance  Float    @default(0.5)  // Maximum slippage in % (e.g. 0.5%)
+  gasMultiplier      Float    @default(1.1)  // Safety buffer multiplier for gas
+  paperTrading       Boolean  @default(true) // If true, simulate only without real execution
+  activeChains       String   @default("ethereum,arbitrum") // Comma-separated list of enabled chains
+}
