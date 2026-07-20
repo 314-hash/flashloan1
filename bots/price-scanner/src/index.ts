@@ -413,6 +413,31 @@ class PriceScanner {
     }
   }
 
+  private calculateUniswapV3Price(
+    pool: PoolCache,
+    state: any,
+    baseToken: string,
+    quoteToken: string
+  ): number {
+    const sqrtPriceX96 = BigInt(state.sqrtPriceX96);
+    
+    // Price = (sqrtPriceX96 / 2^96)^2
+    const ratio = Number(sqrtPriceX96) / Math.pow(2, 96);
+    const rawPrice = ratio * ratio;
+
+    const token0Decimals = this.networkConfig.tokens[pool.token0].decimals;
+    const token1Decimals = this.networkConfig.tokens[pool.token1].decimals;
+
+    // Price of Token0 in terms of Token1
+    const token0PriceInToken1 = rawPrice * Math.pow(10, token0Decimals - token1Decimals);
+
+    if (baseToken === pool.token0 && quoteToken === pool.token1) {
+      return token0PriceInToken1;
+    } else {
+      return 1 / token0PriceInToken1;
+    }
+  }
+
   private async executeTrade(route: any, inputAmount: number): Promise<ethers.TransactionResponse> {
     if (!this.signer) {
       throw new Error('No wallet signer loaded. Configure EXECUTOR_PRIVATE_KEY.');
